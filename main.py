@@ -2,10 +2,11 @@ from URLParser import URLParser
 
 
 def main():
-    index = URLParser('TCS')
+    index = URLParser('BANKNIFTY')
+    index.get('14JAN2021')
+    index.get('21JAN2021')
     index.get('28JAN2021')
-    index.get('25FEB2021')
-    index.get('25MAR2021')
+    index.get('4FEB2021')
 
 
 if __name__ == "__main__":

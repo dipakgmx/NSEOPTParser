@@ -19,7 +19,7 @@ class URLParser(object):
 
     def __init__(self, index):
         self.optionValues = {'segmentLink': 17,
-                             'instrument': 'OPTSTK',
+                             'instrument': 'OPTIDX',
                              'symbol': None,
                              'date': None
                              }
@@ -28,7 +28,7 @@ class URLParser(object):
 
     def get(self, strikeDate):
         self.optionValues = {'segmentLink': 17,
-                             'instrument': 'OPTSTK',
+                             'instrument': 'OPTIDX',
                              'symbol': self.index,
                              'date': strikeDate
                              }

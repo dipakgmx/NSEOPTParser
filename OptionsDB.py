@@ -44,7 +44,7 @@ class OptionsDB(object):
         self.cur.execute("""
                     CREATE TABLE IF NOT EXISTS "CALLS" (
                     "Time"	TEXT NOT NULL,
-                    "ExpiryDate"	TEXT,
+                    "ExpiryDate"	TEXT NOT NULL,
                     "StrikePrice"	INTEGER NOT NULL,
                     "OI"	INTEGER,
                     "ChangeInOI"	INTEGER,
@@ -56,16 +56,15 @@ class OptionsDB(object):
                     "BidPrice"	INTEGER,
                     "AskPrice"	INTEGER,
                     "AskQty"	INTEGER,
-                    UNIQUE("Time","StrikePrice"),
+                    UNIQUE("Time","StrikePrice","ExpiryDate"),
                     FOREIGN KEY("Time") REFERENCES "PRICES"("Time"),
-                    PRIMARY KEY("StrikePrice"),
                     FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate"));
                     """)
 
         self.cur.execute("""
                     CREATE TABLE IF NOT EXISTS "PUTS" (
                     "Time"	TEXT NOT NULL,
-                    "ExpiryDate"	TEXT,
+                    "ExpiryDate"	TEXT NOT NULL,
                     "StrikePrice"	INTEGER NOT NULL,
                     "OI"	INTEGER,
                     "ChangeInOI"	INTEGER,
@@ -77,9 +76,8 @@ class OptionsDB(object):
                     "BidPrice"	INTEGER,
                     "AskPrice"	INTEGER,
                     "AskQty"	INTEGER,
-                    UNIQUE("Time","StrikePrice"),
+                    UNIQUE("Time","StrikePrice","ExpiryDate"),
                     FOREIGN KEY("Time") REFERENCES "PRICES"("Time"),
-                    PRIMARY KEY("StrikePrice"),
                     FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate"));
                     """)
 
