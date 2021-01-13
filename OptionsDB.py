@@ -1,5 +1,7 @@
 import sqlite3
+import threading
 
+lock = threading.Lock()
 
 class OptionsDB(object):
     """sqlite3 database class that holds testers jobs"""
@@ -9,9 +11,9 @@ class OptionsDB(object):
         """Initialize db class variables"""
 
         if database_name is not None:
-            self.connection = sqlite3.connect(database_name)
+            self.connection = sqlite3.connect(database_name, check_same_thread=False)
         else:
-            self.connection = sqlite3.connect(self._DB_FILENAME)
+            self.connection = sqlite3.connect(self._DB_FILENAME, check_same_thread=False)
 
         self.cur = self.connection.cursor()
 
@@ -35,6 +37,7 @@ class OptionsDB(object):
                     CREATE TABLE IF NOT EXISTS "PRICES" (
                     "Time"	TEXT NOT NULL UNIQUE,
                     "ExpiryDate"	TEXT NOT NULL,
+                    "CurrentPrice"	INTEGER NOT NULL,
                     PRIMARY KEY("Time"),
                     UNIQUE("Time","ExpiryDate"),
                     FOREIGN KEY("ExpiryDate") REFERENCES "EXPIRY"("ExpiryDate")
@@ -46,6 +49,7 @@ class OptionsDB(object):
                     "Time"	TEXT NOT NULL,
                     "ExpiryDate"	TEXT NOT NULL,
                     "StrikePrice"	INTEGER NOT NULL,
+                    "CurrentPrice"	INTEGER NOT NULL,
                     "OI"	INTEGER,
                     "ChangeInOI"	INTEGER,
                     "Volume"	INTEGER,
@@ -58,7 +62,8 @@ class OptionsDB(object):
                     "AskQty"	INTEGER,
                     UNIQUE("Time","StrikePrice","ExpiryDate"),
                     FOREIGN KEY("Time") REFERENCES "PRICES"("Time"),
-                    FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate"));
+                    FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate")
+                    FOREIGN KEY("CurrentPrice") REFERENCES "PRICES"("CurrentPrice"));
                     """)
 
         self.cur.execute("""
@@ -66,6 +71,7 @@ class OptionsDB(object):
                     "Time"	TEXT NOT NULL,
                     "ExpiryDate"	TEXT NOT NULL,
                     "StrikePrice"	INTEGER NOT NULL,
+                    "CurrentPrice"	INTEGER NOT NULL,
                     "OI"	INTEGER,
                     "ChangeInOI"	INTEGER,
                     "Volume"	INTEGER,
@@ -78,7 +84,8 @@ class OptionsDB(object):
                     "AskQty"	INTEGER,
                     UNIQUE("Time","StrikePrice","ExpiryDate"),
                     FOREIGN KEY("Time") REFERENCES "PRICES"("Time"),
-                    FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate"));
+                    FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate")
+                    FOREIGN KEY("CurrentPrice") REFERENCES "PRICES"("CurrentPrice"));
                     """)
 
         self.commit()
@@ -88,13 +95,18 @@ class OptionsDB(object):
         self.connection.close()
 
     def execute(self, new_data, args=''):
-        """execute a row of data to current cursor"""
-        self.cur.execute(new_data, args)
-        self.commit()
+        try:
+            lock.acquire(True)
+            """execute a row of data to current cursor"""
+            self.cur.execute(new_data, args)
+        finally:
+            self.commit()
+            lock.release()
 
     def commit(self):
         """commit changes to database"""
         self.connection.commit()
+
 
     def __enter__(self):
         return self
