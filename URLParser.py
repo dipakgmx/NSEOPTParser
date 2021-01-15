@@ -1,11 +1,12 @@
 import threading
-import logging
 import time
-
 import requests
 from bs4 import BeautifulSoup
 import re
 import dateutil.parser as dparser
+from datetime import datetime
+from pytz import timezone
+
 from OptionsDB import OptionsDB
 
 nse_headers = {'Accept': '*/*',
@@ -33,29 +34,72 @@ class URLParser(object):
     def __init__(self, index):
         self.index = index
         self.database = OptionsDB(index)
+        self.timezone = timezone('Asia/Kolkata')
+
+    def todayAt(self, hr, min=0, sec=0, micros=0):
+        now = datetime.now(self.timezone)
+        return now.replace(hour=hr, minute=min, second=sec, microsecond=micros)
 
     @threaded
-    def get(self, strikeDate):
+    def get(self, strike_date):
         if 'NIFTY' not in self.index:
-            optionValues = {'segmentLink': 17,
+            option_values = {'segmentLink': 17,
                             'instrument': 'OPTSTK',
                             'symbol': self.index,
-                            'date': strikeDate
+                            'date': strike_date
                             }
         else:
-            optionValues = {'segmentLink': 17,
+            option_values = {'segmentLink': 17,
                             'instrument': 'OPTIDX',
                             'symbol': self.index,
-                            'date': strikeDate
+                            'date': strike_date
                             }
         while True:
+            # time_now = datetime.now(self.timezone)
+            # if (time_now > self.todayAt(9)) and (time_now < self.todayAt(15,31)):
             try:
                 response = requests.get(
                     options_url,
-                    params=optionValues,
+                    params=option_values,
                     headers=nse_headers,
                 )
                 response.raise_for_status()
+
+                soup = BeautifulSoup(response.text, 'html5lib')
+                info_table = soup.find("table", attrs={"width": "100%"})
+                texts = info_table.find_all("span")
+                currentStockValue = ''.join(re.findall("\d+\.\d+", texts[0].text))
+                currentDateAndTime = dparser.parse(texts[1].text, fuzzy=True)
+
+                self.database.execute("INSERT OR IGNORE INTO DATE"
+                                      "(LoggingDate) "
+                                      "values (?)",
+                                      [str(currentDateAndTime.date())])
+                self.database.execute("INSERT OR IGNORE INTO EXPIRY"
+                                      "(ExpiryDate,LoggingDate) "
+                                      "values (?, ?)",
+                                      ([option_values.get('date'),
+                                        str(currentDateAndTime.date())]))
+
+                self.database.execute("INSERT OR IGNORE INTO PRICES"
+                                      "(Time, ExpiryDate, CurrentPrice) "
+                                      "values (?, ?, ?)",
+                                      ([str(currentDateAndTime.time()),
+                                        option_values.get('date'),
+                                        currentStockValue]))
+
+                options_table = soup.find("table", attrs={"id": "octable"})
+
+                rows = options_table.find('tbody').find_all('tr')
+
+                data = []
+                for row in rows:
+                    cols = row.find_all('td')
+                    cols = [ele.text.strip() for ele in cols]
+                    data.append([ele for ele in cols if ele])  # Get rid of empty values
+
+                for row in data[:-1]:
+                    self.writeCallsAndPuts(row, currentDateAndTime, option_values, currentStockValue)
 
             except requests.exceptions.HTTPError as errh:
                 print("Http Error:", errh)
@@ -66,42 +110,7 @@ class URLParser(object):
             except requests.exceptions.RequestException as err:
                 print("OOps: Something Else", err)
 
-            soup = BeautifulSoup(response.text, 'html5lib')
-            info_table = soup.find("table", attrs={"width": "100%"})
-            texts = info_table.find_all("span")
-            currentStockValue = ''.join(re.findall("\d+\.\d+", texts[0].text))
-            currentDateAndTime = dparser.parse(texts[1].text, fuzzy=True)
-
-            self.database.execute("INSERT OR IGNORE INTO DATE"
-                                  "(LoggingDate) "
-                                  "values (?)",
-                                  [str(currentDateAndTime.date())])
-            self.database.execute("INSERT OR IGNORE INTO EXPIRY"
-                                  "(ExpiryDate,LoggingDate) "
-                                  "values (?, ?)",
-                                  ([optionValues.get('date'),
-                                    str(currentDateAndTime.date())]))
-
-            self.database.execute("INSERT OR IGNORE INTO PRICES"
-                                  "(Time, ExpiryDate, CurrentPrice) "
-                                  "values (?, ?, ?)",
-                                  ([str(currentDateAndTime.time()),
-                                    optionValues.get('date'),
-                                    currentStockValue]))
-
-            options_table = soup.find("table", attrs={"id": "octable"})
-
-            rows = options_table.find('tbody').find_all('tr')
-
-            data = []
-            for row in rows:
-                cols = row.find_all('td')
-                cols = [ele.text.strip() for ele in cols]
-                data.append([ele for ele in cols if ele])  # Get rid of empty values
-
-            for row in data[:-1]:
-                self.writeCallsAndPuts(row, currentDateAndTime, optionValues, currentStockValue)
-            time.sleep(0.5)
+            time.sleep(1)
 
     def writeCallsAndPuts(self, readValues, currentDateAndTime, optionValues, currentStockValue):
         # Writing strike values across DBs
