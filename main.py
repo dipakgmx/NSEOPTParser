@@ -3,10 +3,7 @@ from URLParser import URLParser
 
 def main():
     index = URLParser('BANKNIFTY')
-    expDates = index.getExpiryDates()
-
-    for expDay in expDates:
-        index.get(expDay)
+    index.startParsing()
 
     # handle21Jan = index.get('21JAN2021')
     # handle28Jan = index.get('28JAN2021')

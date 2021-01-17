@@ -74,6 +74,10 @@ class URLParser(object):
         self.expiryDates = [date['value'] for date in dates[1:]]
         return self.expiryDates
 
+    def startParsing(self):
+        expDates = self.getExpiryDates()
+        for expDay in expDates:
+            self.get(expDay)
 
     @threaded
     def get(self, strike_date):
@@ -110,24 +114,14 @@ class URLParser(object):
                                       "(LoggingDate) "
                                       "values (?)",
                                       [str(current_date_and_time.date())])
-                self.database.execute("INSERT OR IGNORE INTO EXPIRY"
-                                      "(ExpiryDate,LoggingDate) "
-                                      "values (?, ?)",
-                                      ([option_values.get('date'),
-                                        str(current_date_and_time.date())]))
-
-                self.database.execute("INSERT OR IGNORE INTO PRICES"
-                                      "(Time, ExpiryDate, CurrentPrice) "
-                                      "values (?, ?, ?)",
-                                      ([str(current_date_and_time.time()),
-                                        option_values.get('date'),
-                                        current_stock_value]))
 
                 options_table = soup.find("table", attrs={"id": "octable"})
+                someDate = str(dparser.parse(option_values.get('date')).date()),
 
                 rows = options_table.find('tbody').find_all('tr')
 
                 data = []
+
                 for row in rows:
                     cols = row.find_all('td')
                     cols = [ele.text.strip() for ele in cols]
@@ -152,10 +146,13 @@ class URLParser(object):
         callValues = readValues[0:10]
 
         self.database.execute("INSERT OR IGNORE INTO "
-                              "CALLS(Time, ExpiryDate, StrikePrice, CurrentPrice, OI, ChangeInOI,Volume,IV,LTP,NetChange,BidQty,BidPrice,AskPrice,AskQty) "
-                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                              ([str(currentDateAndTime.time()),
-                                optionValues.get('date'),
+                              "CALLS(LoggingDate, Time, ExpiryDate, StrikePrice, CurrentPrice, "
+                              "OI, ChangeInOI, Volume, IV, LTP, NetChange, BidQty, BidPrice, "
+                              "AskPrice, AskQty) "
+                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                              ([str(currentDateAndTime.date()),
+                                str(currentDateAndTime.time()),
+                                str(dparser.parse(optionValues.get('date')).date()),
                                 readValues[10],
                                 currentStockValue,
                                 callValues[0],
@@ -172,10 +169,13 @@ class URLParser(object):
 
         putValues = readValues[::-1][0:10]
         self.database.execute("INSERT OR IGNORE INTO "
-                              "PUTS(Time, ExpiryDate, StrikePrice, CurrentPrice, OI, ChangeInOI,Volume,IV,LTP,NetChange,BidQty,BidPrice,AskPrice,AskQty) "
-                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                              ([str(currentDateAndTime.time()),
-                                optionValues.get('date'),
+                              "PUTS(LoggingDate, Time, ExpiryDate, StrikePrice, CurrentPrice, "
+                              "OI, ChangeInOI, Volume, IV, LTP, NetChange, BidQty, BidPrice,"
+                              " AskPrice, AskQty) "
+                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                              ([str(currentDateAndTime.date()),
+                                str(currentDateAndTime.time()),
+                                str(dparser.parse(optionValues.get('date')).date()),
                                 readValues[10],
                                 currentStockValue,
                                 putValues[0],

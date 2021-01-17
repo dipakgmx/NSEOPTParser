@@ -19,75 +19,56 @@ class OptionsDB(object):
 		self.cur = self.connection.cursor()
 
 		self.cur.execute("""
-                        CREATE TABLE IF NOT EXISTS "DATE" (
-                        "LoggingDate"	TEXT UNIQUE,
-                        PRIMARY KEY("LoggingDate"));
-                        """)
+		CREATE TABLE IF NOT EXISTS "DATE" (
+		"LoggingDate"	TEXT UNIQUE NOT NULL,
+		PRIMARY KEY("LoggingDate")
+		);
+		""")
 
 		self.cur.execute("""
-                    CREATE TABLE IF NOT EXISTS "EXPIRY" (
-                    "ExpiryDate"	TEXT NOT NULL,
-                    "LoggingDate"	TEXT NOT NULL,
-                    FOREIGN KEY("LoggingDate") REFERENCES "DATE"("LoggingDate"),
-                    PRIMARY KEY("ExpiryDate"),
-                    UNIQUE("ExpiryDate","LoggingDate")
-                    );
-                    """)
+		CREATE TABLE IF NOT EXISTS "CALLS" (
+		"LoggingDate"	TEXT NOT NULL,
+		"Time"		TEXT NOT NULL,
+		"ExpiryDate"	TEXT NOT NULL,
+		"StrikePrice"	INTEGER NOT NULL,
+		"CurrentPrice"	INTEGER NOT NULL,
+		"OI"		INTEGER,
+		"ChangeInOI"	INTEGER,
+		"Volume"	INTEGER,
+		"IV"		INTEGER,
+		"LTP"		INTEGER,
+		"NetChange"	INTEGER,
+		"BidQty"	INTEGER,
+		"BidPrice"	INTEGER,
+		"AskPrice"	INTEGER,
+		"AskQty"	INTEGER,
+		FOREIGN KEY("LoggingDate") REFERENCES "DATE"("LoggingDate"),
+		UNIQUE("LoggingDate", "Time","StrikePrice","ExpiryDate")
+		);
+		""")
 
 		self.cur.execute("""
-                    CREATE TABLE IF NOT EXISTS "PRICES" (
-                    "Time"	TEXT NOT NULL UNIQUE,
-                    "ExpiryDate"	TEXT NOT NULL,
-                    "CurrentPrice"	INTEGER NOT NULL,
-                    PRIMARY KEY("Time"),
-                    UNIQUE("Time","ExpiryDate"),
-                    FOREIGN KEY("ExpiryDate") REFERENCES "EXPIRY"("ExpiryDate")
-                );
-                """)
+		CREATE TABLE IF NOT EXISTS "PUTS" (
+		"LoggingDate"	TEXT NOT NULL,
+		"Time"		TEXT NOT NULL,
+		"ExpiryDate"	TEXT NOT NULL,
+		"StrikePrice"	INTEGER NOT NULL,
+		"CurrentPrice"	INTEGER NOT NULL,
+		"OI"		INTEGER,
+		"ChangeInOI"	INTEGER,
+		"Volume"	INTEGER,
+		"IV"		INTEGER,
+		"LTP"		INTEGER,
+		"NetChange"	INTEGER,
+		"BidQty"	INTEGER,
+		"BidPrice"	INTEGER,
+		"AskPrice"	INTEGER,
+		"AskQty"	INTEGER,
+		FOREIGN KEY("LoggingDate") REFERENCES "DATE"("LoggingDate"),
+		UNIQUE("LoggingDate", "Time","StrikePrice","ExpiryDate")
+		);
+		""")
 
-		self.cur.execute("""
-                    CREATE TABLE IF NOT EXISTS "CALLS" (
-                    "Time"	TEXT NOT NULL,
-                    "ExpiryDate"	TEXT NOT NULL,
-                    "StrikePrice"	INTEGER NOT NULL,
-                    "CurrentPrice"	INTEGER NOT NULL,
-                    "OI"	INTEGER,
-                    "ChangeInOI"	INTEGER,
-                    "Volume"	INTEGER,
-                    "IV"	INTEGER,
-                    "LTP"	INTEGER,
-                    "NetChange"	INTEGER,
-                    "BidQty"	INTEGER,
-                    "BidPrice"	INTEGER,
-                    "AskPrice"	INTEGER,
-                    "AskQty"	INTEGER,
-                    UNIQUE("Time","StrikePrice","ExpiryDate"),
-                    FOREIGN KEY("Time") REFERENCES "PRICES"("Time"),
-                    FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate"),
-                    FOREIGN KEY("CurrentPrice") REFERENCES "PRICES"("CurrentPrice"));
-                    """)
-
-		self.cur.execute("""
-                    CREATE TABLE IF NOT EXISTS "PUTS" (
-                    "Time"	TEXT NOT NULL,
-                    "ExpiryDate"	TEXT NOT NULL,
-                    "StrikePrice"	INTEGER NOT NULL,
-                    "CurrentPrice"	INTEGER NOT NULL,
-                    "OI"	INTEGER,
-                    "ChangeInOI"	INTEGER,
-                    "Volume"	INTEGER,
-                    "IV"	INTEGER,
-                    "LTP"	INTEGER,
-                    "NetChange"	INTEGER,
-                    "BidQty"	INTEGER,
-                    "BidPrice"	INTEGER,
-                    "AskPrice"	INTEGER,
-                    "AskQty"	INTEGER,
-                    UNIQUE("Time","StrikePrice","ExpiryDate"),
-                    FOREIGN KEY("Time") REFERENCES "PRICES"("Time"),
-                    FOREIGN KEY("ExpiryDate") REFERENCES "PRICES"("ExpiryDate"),
-                    FOREIGN KEY("CurrentPrice") REFERENCES "PRICES"("CurrentPrice"));
-                    """)
 		self.commit()
 
 	def close(self):
