@@ -6,7 +6,8 @@ import re
 import dateutil.parser as dparser
 from datetime import datetime
 from pytz import timezone
-
+from requests_html import HTMLSession
+import urllib.parse as urlparse
 from OptionsDB import OptionsDB
 
 nse_headers = {'Accept': '*/*',
@@ -35,10 +36,44 @@ class URLParser(object):
         self.index = index
         self.database = OptionsDB(index)
         self.timezone = timezone('Asia/Kolkata')
+        self.expiryDates = []
 
     def todayAt(self, hr, min=0, sec=0, micros=0):
         now = datetime.now(self.timezone)
         return now.replace(hour=hr, minute=min, second=sec, microsecond=micros)
+
+    def getExpiryDates(self):
+        if 'NIFTY' not in self.index:
+            option_values = {'segmentLink': 17,
+                            'instrument': 'OPTSTK',
+                            'symbol': self.index,
+                             'date': 'select'
+                             }
+        else:
+            option_values = {'segmentLink': 17,
+                            'instrument': 'OPTIDX',
+                            'symbol': self.index,
+                             'date': 'select'
+                             }
+
+        session = HTMLSession()
+
+        url_parse = urlparse.urlparse(options_url)
+        query = url_parse.query
+        url_dict = dict(urlparse.parse_qsl(query))
+        url_dict.update(option_values)
+        url_new_query = urlparse.urlencode(url_dict)
+        url_parse = url_parse._replace(query=url_new_query)
+        url_with_params = urlparse.urlunparse(url_parse)
+
+        request = session.get(url_with_params)
+        soup = BeautifulSoup(request.text, 'html5lib')
+
+        form_values = soup.find("form", attrs={"name": "ocForm"})
+        dates = form_values.select('option[value]')
+        self.expiryDates = [date['value'] for date in dates[1:]]
+        return self.expiryDates
+
 
     @threaded
     def get(self, strike_date):
@@ -68,25 +103,25 @@ class URLParser(object):
                 soup = BeautifulSoup(response.text, 'html5lib')
                 info_table = soup.find("table", attrs={"width": "100%"})
                 texts = info_table.find_all("span")
-                currentStockValue = ''.join(re.findall("\d+\.\d+", texts[0].text))
-                currentDateAndTime = dparser.parse(texts[1].text, fuzzy=True)
+                current_stock_value = ''.join(re.findall("\d+\.\d+", texts[0].text))
+                current_date_and_time = dparser.parse(texts[1].text, fuzzy=True)
 
                 self.database.execute("INSERT OR IGNORE INTO DATE"
                                       "(LoggingDate) "
                                       "values (?)",
-                                      [str(currentDateAndTime.date())])
+                                      [str(current_date_and_time.date())])
                 self.database.execute("INSERT OR IGNORE INTO EXPIRY"
                                       "(ExpiryDate,LoggingDate) "
                                       "values (?, ?)",
                                       ([option_values.get('date'),
-                                        str(currentDateAndTime.date())]))
+                                        str(current_date_and_time.date())]))
 
                 self.database.execute("INSERT OR IGNORE INTO PRICES"
                                       "(Time, ExpiryDate, CurrentPrice) "
                                       "values (?, ?, ?)",
-                                      ([str(currentDateAndTime.time()),
+                                      ([str(current_date_and_time.time()),
                                         option_values.get('date'),
-                                        currentStockValue]))
+                                        current_stock_value]))
 
                 options_table = soup.find("table", attrs={"id": "octable"})
 
@@ -99,7 +134,7 @@ class URLParser(object):
                     data.append([ele for ele in cols if ele])  # Get rid of empty values
 
                 for row in data[:-1]:
-                    self.writeCallsAndPuts(row, currentDateAndTime, option_values, currentStockValue)
+                    self.writeCallsAndPuts(row, current_date_and_time, option_values, current_stock_value)
 
             except requests.exceptions.HTTPError as errh:
                 print("Http Error:", errh)
