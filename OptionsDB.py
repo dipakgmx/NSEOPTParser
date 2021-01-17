@@ -84,6 +84,15 @@ class OptionsDB(object):
 			self.commit()
 			lock.release()
 
+	def executemany(self, new_data, args=''):
+		try:
+			lock.acquire(True)
+			"""execute a row of data to current cursor"""
+			self.cur.executemany(new_data, args)
+		finally:
+			self.commit()
+			lock.release()
+
 	def commit(self):
 		"""commit changes to database"""
 		self.connection.commit()

@@ -39,10 +39,12 @@ class URLParser(object):
         self.expiryDates = []
 
     def todayAt(self, hr, min=0, sec=0, micros=0):
+        """Convert time to india time zone"""
         now = datetime.now(self.timezone)
         return now.replace(hour=hr, minute=min, second=sec, microsecond=micros)
 
     def getExpiryDates(self):
+        """Parses expiry dates when started"""
         if 'NIFTY' not in self.index:
             option_values = {'segmentLink': 17,
                             'instrument': 'OPTSTK',
@@ -75,6 +77,7 @@ class URLParser(object):
         return self.expiryDates
 
     def startParsing(self):
+        """Generates threads based on the expiry dates"""
         expDates = self.getExpiryDates()
         for expDay in expDates:
             self.get(expDay)
@@ -94,63 +97,72 @@ class URLParser(object):
                             'date': strike_date
                             }
         while True:
-            # time_now = datetime.now(self.timezone)
-            # if (time_now > self.todayAt(9)) and (time_now < self.todayAt(15,31)):
-            try:
-                response = requests.get(
-                    options_url,
-                    params=option_values,
-                    headers=nse_headers,
-                )
-                response.raise_for_status()
+            time_now = datetime.now(self.timezone)
+            if (time_now > self.todayAt(9)) and (time_now < self.todayAt(15,31)):
+                try:
+                    response = requests.get(
+                        options_url,
+                        params=option_values,
+                        headers=nse_headers,
+                    )
+                    response.raise_for_status()
 
-                soup = BeautifulSoup(response.text, 'html5lib')
-                info_table = soup.find("table", attrs={"width": "100%"})
-                texts = info_table.find_all("span")
-                current_stock_value = ''.join(re.findall("\d+\.\d+", texts[0].text))
-                current_date_and_time = dparser.parse(texts[1].text, fuzzy=True)
+                    soup = BeautifulSoup(response.text, 'html5lib')
+                    info_table = soup.find("table", attrs={"width": "100%"})
+                    texts = info_table.find_all("span")
+                    current_stock_value = ''.join(re.findall("\d+\.\d+", texts[0].text))
+                    current_date_and_time = dparser.parse(texts[1].text, fuzzy=True)
 
-                self.database.execute("INSERT OR IGNORE INTO DATE"
-                                      "(LoggingDate) "
-                                      "values (?)",
-                                      [str(current_date_and_time.date())])
+                    self.database.execute("INSERT OR IGNORE INTO DATE"
+                                          "(LoggingDate) "
+                                          "values (?)",
+                                          [str(current_date_and_time.date())])
 
-                options_table = soup.find("table", attrs={"id": "octable"})
-                someDate = str(dparser.parse(option_values.get('date')).date()),
+                    options_table = soup.find("table", attrs={"id": "octable"})
+                    rows = options_table.find('tbody').find_all('tr')
 
-                rows = options_table.find('tbody').find_all('tr')
+                    data = []
+                    call_values = []
+                    put_values = []
 
-                data = []
+                    for row in rows:
+                        cols = row.find_all('td')
+                        cols = [ele.text.strip() for ele in cols]
+                        data.append([ele for ele in cols if ele])  # Get rid of empty values
 
-                for row in rows:
-                    cols = row.find_all('td')
-                    cols = [ele.text.strip() for ele in cols]
-                    data.append([ele for ele in cols if ele])  # Get rid of empty values
+                    for row in data[:-1]:
+                        self.writeCallsAndPuts(row, current_date_and_time, option_values, current_stock_value,
+                                               call_values, put_values)
 
-                for row in data[:-1]:
-                    self.writeCallsAndPuts(row, current_date_and_time, option_values, current_stock_value)
+                    self.database.executemany("INSERT OR IGNORE INTO "
+                                              "CALLS(LoggingDate, Time, ExpiryDate, StrikePrice, CurrentPrice, "
+                                              "OI, ChangeInOI, Volume, IV, LTP, NetChange, BidQty, BidPrice, "
+                                              "AskPrice, AskQty) "
+                                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                              call_values)
 
-            except requests.exceptions.HTTPError as errh:
-                print("Http Error:", errh)
-            except requests.exceptions.ConnectionError as errc:
-                print("Error Connecting:", errc)
-            except requests.exceptions.Timeout as errt:
-                print("Timeout Error:", errt)
-            except requests.exceptions.RequestException as err:
-                print("OOps: Something Else", err)
+                    self.database.executemany("INSERT OR IGNORE INTO "
+                                              "PUTS(LoggingDate, Time, ExpiryDate, StrikePrice, CurrentPrice, "
+                                              "OI, ChangeInOI, Volume, IV, LTP, NetChange, BidQty, BidPrice, "
+                                              "AskPrice, AskQty) "
+                                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                                              put_values)
+
+                except requests.exceptions.HTTPError as errh:
+                    print("Http Error:", errh)
+                except requests.exceptions.ConnectionError as errc:
+                    print("Error Connecting:", errc)
+                except requests.exceptions.Timeout as errt:
+                    print("Timeout Error:", errt)
+                except requests.exceptions.RequestException as err:
+                    print("OOps: Something Else", err)
 
             time.sleep(1)
 
-    def writeCallsAndPuts(self, readValues, currentDateAndTime, optionValues, currentStockValue):
-        # Writing strike values across DBs
+    def writeCallsAndPuts(self, readValues, currentDateAndTime, optionValues, currentStockValue, call_entries, put_entries):
         callValues = readValues[0:10]
-
-        self.database.execute("INSERT OR IGNORE INTO "
-                              "CALLS(LoggingDate, Time, ExpiryDate, StrikePrice, CurrentPrice, "
-                              "OI, ChangeInOI, Volume, IV, LTP, NetChange, BidQty, BidPrice, "
-                              "AskPrice, AskQty) "
-                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                              ([str(currentDateAndTime.date()),
+        #Append call values
+        call_entries.append((str(currentDateAndTime.date()),
                                 str(currentDateAndTime.time()),
                                 str(dparser.parse(optionValues.get('date')).date()),
                                 readValues[10],
@@ -164,16 +176,12 @@ class URLParser(object):
                                 callValues[6],
                                 callValues[7],
                                 callValues[8],
-                                callValues[9]])
-                              )
+                                callValues[9]))
 
         putValues = readValues[::-1][0:10]
-        self.database.execute("INSERT OR IGNORE INTO "
-                              "PUTS(LoggingDate, Time, ExpiryDate, StrikePrice, CurrentPrice, "
-                              "OI, ChangeInOI, Volume, IV, LTP, NetChange, BidQty, BidPrice,"
-                              " AskPrice, AskQty) "
-                              "values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                              ([str(currentDateAndTime.date()),
+
+        #Append put values
+        put_entries.append((str(currentDateAndTime.date()),
                                 str(currentDateAndTime.time()),
                                 str(dparser.parse(optionValues.get('date')).date()),
                                 readValues[10],
@@ -187,5 +195,4 @@ class URLParser(object):
                                 putValues[6],
                                 putValues[7],
                                 putValues[8],
-                                putValues[9]])
-                              )
+                                putValues[9]))
