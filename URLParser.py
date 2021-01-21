@@ -77,8 +77,8 @@ class URLParser(object):
 														row.get('CE', {}).get('change'),
 														row.get('CE', {}).get('bidQty'),
 														row.get('CE', {}).get('bidprice'),
-														row.get('CE', {}).get('askQty'),
-														row.get('CE', {}).get('askPrice')])
+														row.get('CE', {}).get('askPrice'),
+														row.get('CE', {}).get('askQty')])
 
 							if row.get('PE', {}):
 								self.database.execute("INSERT OR IGNORE INTO "
@@ -99,8 +99,8 @@ class URLParser(object):
 													   row.get('PE', {}).get('change'),
 													   row.get('PE', {}).get('bidQty'),
 													   row.get('PE', {}).get('bidprice'),
-													   row.get('PE', {}).get('askQty'),
-													   row.get('PE', {}).get('askPrice')])
+													   row.get('PE', {}).get('askPrice'),
+													   row.get('PE', {}).get('askQty')])
 						print("Success :", datetime.now())
 
 					except TypeError as te:
